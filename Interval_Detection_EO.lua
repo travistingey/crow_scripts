@@ -1,34 +1,32 @@
------- Streaming Interval Detection
--- Input 1: 1 v/oct Melody
--- Input 2: Trigger Analysis
--- Output 1: Quantized Melody
+------ Chord + Quantized Melody Machine using Crow and Ensemble Oscillator
+-- Input 1: Random 0-5 Volts
+-- Input 2: Trigger Analysis & Chord Change
+-- Output 1: Quantized Melody 
 -- Output 2: None
--- Output 3: Root Note
--- Output 4: Select CV
-
-
+-- Output 3: Ensemble Oscillator 1v/oct / Root Note
+-- Output 4: Ensemble Oscillator Scale / Chord Select CV
 
 -- Definition Lists
 note_def = {'C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'}
-scale_select= {0, 0.5, 0.9, 1.5, 2, 2.6, 3.2, 3.7, 4.4, 4.9}
+scale_select= {0, 0.5, 0.9, 1.5, 2, 2.6, 3.2, 3.7, 4.4, 4.9} -- voltage threshold for changing chords in Ensemble Oscillator
 Intervals = {
-    {name = "major ", notes = {0,4,7}, select = 1},     -- 1
-    {name = "minor", notes = {0,3,7}, select = 2},      -- 2
-    {name = "°", notes = {0,3,6}, select = 3 },          -- 3
-    {name = "+", notes = {0,4,8}, select = 4},          -- 4
-    {name = "sus4", notes = {0,5,7}, select = 5},       -- 5
-    {name = "maj7", notes = {0,4,7,11}, select = 6},    -- 6
-    {name = "7", notes = {0,4,7,10}, select = 7},       -- 7
-    {name = "m7", notes = {0,3,7,10}, select = 8},      -- 8
-    {name = "m6", notes = {0,3,7,9}, select = 9},       -- 9
-    {name= "ø", notes = {0,3,6,10}, select = 10},       -- 10
+    {name = " oct", notes = {0}, scale = {0,0,0,0,0,0,2,4,5,7,9,11}, select = 1},                       -- 1
+    {name = " 5", notes = {0,7}, scale = {0,0,0,2,4,5,7,7,7,9,10,11}, select = 2},                      -- 2
+    {name= " major", notes = {0,4,7}, scale = {0,0,0,4,4,4,7,7,2,5,9,11}, select = 3},                  -- 3
+    {name = " minor", notes = {0,3,7}, scale = {0,0,3,3,3,7,7,7,2,2,5,9}, select = 4},                  -- 4
+    {name = " minor sus4", notes = {0,5,7}, scale = {0,5,5,5,5,7,7,10,10,10,14,9}, select = 5 },        -- 5
+    {name = " m7", notes = {0,3,10}, scale = {0,0,3,3,3,7,7,10,10,2,5,9}, select = 6},                  -- 6
+    {name= " maj7", notes = {0,4,11}, scale = {0,0,4,4,4,7,7,11,11,2,5,9}, select = 7},                 -- 7
+    {name = " stacked fifths", notes = {0,7,2,9}, scale = {0,0,0,7,7,7,14,14,14,21,21,21}, select = 8}, -- 8
+    {name = " minor b9/#9", notes = {0,3,5,10}, scale = {0,0,3,3,5,5,7,7,10,10,13,15}, select = 9},     -- 9
+    {name = " semitones", notes = {0,1,2,3}, scale = {0,1,2,3,4,5,6,7,8,9,10,11}, select = 10}          -- 10
 }
 
 ---- Variables
 history_length = 16
 note_history = {}
 note_freq = {0,0,0,0,0,0,0,0,0,0,0,0}
-quantize_scale = {0,2,4,5,7,9,11}
+quantize_scale = {0,0,0,4,4,4,7,7,2,5,9,11}
 current_chord = {
     root = 0,
     select = 1,
@@ -125,6 +123,7 @@ FindIntervals = function(notes, interval, freq)
                 root = i-1,
                 name = note_def[i] .. interval.name,
                 select = interval.select,
+                scale = interval.scale,
                 notes = table.map(interval.notes,function(d) return (d + i - 1)%12 end),
                 intervals = interval.notes
             }
@@ -144,10 +143,8 @@ end
 -- Init
 function init()
     start = time()
-    input[1].mode('scale', quantize_scale)
+    input[1].mode('scale', {0,1,2,3,4,5,6,7,8,9,10,11})
     input[2].mode('change')
-    output[1].slew = 0.05
-    output[3].slew = 1
 end
 
 
@@ -166,22 +163,19 @@ input[2].change = function(c)
                 return a.score > b.score
             end)
             print(found[1].name)
+            quantize_scale = found[1].scale
             output[3].volts = found[1].root / 12
             output[4].volts = scale_select[found[1].select]
         end
-        
-        
-        
+      
     end 
 end
 
 input[1].scale = function(s)
-    
     if #note_history == history_length then
         table.remove(note_history,16)
     end
-    
-    table.insert(note_history,1,s.note % 12)
 
-    output[1].volts = s.volts
+    table.insert(note_history,1,quantize_scale[s.index] % 12)
+    output[1].volts = quantize_scale[s.index] * 1/12
 end
